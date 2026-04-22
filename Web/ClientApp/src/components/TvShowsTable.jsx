@@ -22,7 +22,7 @@ export function TvShowsTable({ items, knownServer = [], showServer = false }) {
         const resolutions = collectTvShowResolutions(tvShow);
 
         return (
-          <details key={tvShow.ratingKey} className="surface overflow-hidden p-0">
+          <details key={`${tvShow.serverId}-${tvShow.ratingKey}`} className="surface overflow-hidden p-0">
             <summary className="cursor-pointer list-none p-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -33,7 +33,7 @@ export function TvShowsTable({ items, knownServer = [], showServer = false }) {
                     <span className="chip">{tvShow.episodes?.length ?? 0} episodes</span>
                     <span className="chip">{seasons.length} seasons</span>
                     {resolutions.map((resolution) => (
-                      <span key={`${tvShow.ratingKey}-${resolution}`} className="chip">
+                      <span key={`${tvShow.serverId}-${tvShow.ratingKey}-${resolution}`} className="chip">
                         {resolution}
                       </span>
                     ))}
@@ -43,15 +43,21 @@ export function TvShowsTable({ items, knownServer = [], showServer = false }) {
                 <div className="flex flex-wrap gap-2">
                   {seasons.map((seasonNumber) => (
                     <DownloadButton2
-                      key={`${tvShow.ratingKey}-season-${seasonNumber}`}
+                      key={`${tvShow.serverId}-${tvShow.ratingKey}-season-${seasonNumber}`}
                       mediaType="tvshow"
                       mediaKey={tvShow.ratingKey}
                       season={seasonNumber}
+                      serverId={tvShow.serverId}
                     >
                       Season {seasonNumber}
                     </DownloadButton2>
                   ))}
-                  <DownloadButton2 color="info" mediaType="tvshow" mediaKey={tvShow.ratingKey}>
+                  <DownloadButton2
+                    color="info"
+                    mediaType="tvshow"
+                    mediaKey={tvShow.ratingKey}
+                    serverId={tvShow.serverId}
+                  >
                     Complete Show
                   </DownloadButton2>
                 </div>
@@ -78,7 +84,7 @@ export function TvShowsTable({ items, knownServer = [], showServer = false }) {
                         const mediaFile = episode.mediaFiles?.[0];
 
                         return (
-                          <tr key={episode.ratingKey}>
+                          <tr key={`${episode.serverId}-${episode.ratingKey}`}>
                             <td>{formatEpisodeCode(episode.seasonNumber, episode.episodeNumber)}</td>
                             <td>{episode.title}</td>
                             <td>{episode.year ?? "—"}</td>

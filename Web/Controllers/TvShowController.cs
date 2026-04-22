@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Web.Data;
 using Web.Models;
 
@@ -18,12 +18,17 @@ public class TvShowController : ControllerBase
     [HttpGet]
     public async Task<IEnumerable<TvShow>> Get([FromQuery] string libraryId)
     {
-        return await _unitOfWork.TvShowRepository.Get(x=>x.LibraryId == libraryId, s=>s.OrderBy(x=>x.Title), nameof(TvShow.Episodes));
+        return await _unitOfWork.TvShowRepository.Get(
+            x => x.LibraryId == libraryId,
+            s => s.OrderBy(x => x.Title),
+            nameof(TvShow.Episodes));
     }
-    
-    [HttpGet("tvShowId")]
-    public async Task<TvShow?> GetById(string tvShowId)
+
+    [HttpGet("{tvShowId}")]
+    public async Task<TvShow?> GetById(string tvShowId, [FromQuery] string? serverId = null)
     {
-        return await _unitOfWork.TvShowRepository.GetById(tvShowId);
+        return (await _unitOfWork.TvShowRepository.Get(
+                x => x.RatingKey == tvShowId && (serverId == null || x.ServerId == serverId)))
+            .FirstOrDefault();
     }
 }

@@ -32,7 +32,7 @@ export function EpisodesTable({ items, knownServers = [], showServer = false }) 
               const mediaFile = episode.mediaFiles?.[0];
 
               return (
-                <tr key={episode.ratingKey}>
+                <tr key={`${episode.serverId}-${episode.ratingKey}`}>
                   <td className="font-medium text-white">{episode.tvShow?.title ?? "Unknown show"}</td>
                   <td>{formatEpisodeCode(episode.seasonNumber, episode.episodeNumber)}</td>
                   <td>{episode.title}</td>

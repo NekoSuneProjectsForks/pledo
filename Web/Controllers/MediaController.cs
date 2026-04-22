@@ -59,11 +59,11 @@ public class MediaController : ControllerBase
         foreach (var playlist in playlists)
         {
             var movies =
-                (await _unitOfWork.MovieRepository.Get(x => playlist.Items.Contains(x.RatingKey),
+                (await _unitOfWork.MovieRepository.Get(x => x.ServerId == playlist.ServerId && playlist.Items.Contains(x.RatingKey),
                     orderBy: s => s.OrderBy(x => x.Title))).ToDictionary(x =>
                     x.RatingKey);
             var episodes =
-                (await _unitOfWork.EpisodeRepository.Get(x => playlist.Items.Contains(x.RatingKey),
+                (await _unitOfWork.EpisodeRepository.Get(x => x.ServerId == playlist.ServerId && playlist.Items.Contains(x.RatingKey),
                     orderBy: s => s.OrderBy(x => x.Title),
                     includeProperties: nameof(Episode.TvShow))).ToDictionary(x => x.RatingKey);
 

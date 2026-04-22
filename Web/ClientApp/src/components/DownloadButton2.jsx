@@ -33,6 +33,7 @@ export function DownloadButton2({
           mediaKey,
           mediaFileKey,
           season,
+          serverId,
         }),
         {
           method: "POST",

@@ -1,4 +1,4 @@
-﻿using Web.Models;
+using Web.Models;
 using Web.Models.Helper;
 
 namespace Web.Data;
@@ -10,7 +10,7 @@ public class MovieRepository : RepositoryBase<Movie>
     }
 
     public override Task Upsert(IEnumerable<Movie> t)
-    {        
+    {
         var moviesInDb = CustomDbContext.Movies.ToHashSet();
         List<Movie> movies = t.ToList();
         var moviesToUpsert = movies.ToHashSet();
@@ -22,5 +22,4 @@ public class MovieRepository : RepositoryBase<Movie>
         CustomDbContext.Movies.UpdateRange(moviesToUpdate);
         return Task.CompletedTask;
     }
-    
 }

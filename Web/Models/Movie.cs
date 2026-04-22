@@ -1,11 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 using Web.Models.Interfaces;
 
 namespace Web.Models;
 
+[PrimaryKey(nameof(ServerId), nameof(RatingKey))]
 public class Movie : IMediaElement, ISearchable
 {
-    [Key]
     public string RatingKey { get; set; }
     public string Key { get; set; }
     public string Title { get; set; }

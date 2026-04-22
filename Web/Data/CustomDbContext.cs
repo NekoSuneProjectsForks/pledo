@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Web.Models;
 
@@ -25,16 +25,24 @@ public class CustomDbContext : Microsoft.EntityFrameworkCore.DbContext
             .HasConversion(
                 v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
                 v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null));
-        
+
+        modelBuilder.Entity<TvShow>()
+            .HasMany(show => show.Episodes)
+            .WithOne(episode => episode.TvShow)
+            .HasForeignKey(episode => new { episode.ServerId, episode.TvShowId })
+            .HasPrincipalKey(show => new { show.ServerId, show.RatingKey });
+
         modelBuilder.Entity<Movie>()
-            .HasMany(e => e.MediaFiles)
+            .HasMany(movie => movie.MediaFiles)
             .WithOne()
-            .HasForeignKey(e => e.MovieRatingKey);
-        
+            .HasForeignKey(mediaFile => new { mediaFile.ServerId, mediaFile.MovieRatingKey })
+            .HasPrincipalKey(movie => new { movie.ServerId, movie.RatingKey });
+
         modelBuilder.Entity<Episode>()
-            .HasMany(e => e.MediaFiles)
+            .HasMany(episode => episode.MediaFiles)
             .WithOne()
-            .HasForeignKey(e => e.EpisodeRatingKey);
+            .HasForeignKey(mediaFile => new { mediaFile.ServerId, mediaFile.EpisodeRatingKey })
+            .HasPrincipalKey(episode => new { episode.ServerId, episode.RatingKey });
     }
 
     public CustomDbContext(DbContextOptions<CustomDbContext> options)

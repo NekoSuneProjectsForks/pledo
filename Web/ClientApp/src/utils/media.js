@@ -44,7 +44,7 @@ export function buildDirectDownloadLink({ knownServers = [], serverId, mediaFile
   }
 }
 
-export function buildQueueDownloadPath({ mediaType, mediaKey, mediaFileKey, season }) {
+export function buildQueueDownloadPath({ mediaType, mediaKey, mediaFileKey, season, serverId }) {
   const input = `api/download/${mediaType}/${mediaKey}`;
   const searchParams = new URLSearchParams();
 
@@ -54,6 +54,10 @@ export function buildQueueDownloadPath({ mediaType, mediaKey, mediaFileKey, seas
 
   if (typeof mediaFileKey !== "undefined") {
     searchParams.set("mediaFileKey", mediaFileKey);
+  }
+
+  if (typeof serverId !== "undefined" && serverId !== null && serverId !== "") {
+    searchParams.set("serverId", serverId);
   }
 
   const queryString = searchParams.toString();

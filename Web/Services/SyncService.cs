@@ -118,7 +118,7 @@ public class SyncService : ISyncService
         IPlexRestService plexService)
     {
         ServerRepository serverRepository = unitOfWork.ServerRepository;
-        _syncTask = new BusyTask() { Name = "Syncing servers", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing servers", Type = TaskType.Syncing };
 
         var serversInDb = serverRepository.GetAll();
         var serversFromApi = (await plexService.RetrieveServers(account)).ToList();
@@ -132,7 +132,7 @@ public class SyncService : ISyncService
     private async Task<IReadOnlyCollection<Server>> SyncConnections(IReadOnlyCollection<Server> servers,
         UnitOfWork unitOfWork, IPlexRestService plexService, IReadOnlyDictionary<string, bool> previousServerStatuses)
     {
-        _syncTask = new BusyTask() { Name = "Syncing server connections", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing server connections", Type = TaskType.Syncing };
 
         foreach (var server in servers)
         {
@@ -181,7 +181,7 @@ public class SyncService : ISyncService
 
     private async Task<IReadOnlyCollection<Library>> SyncLibraries(IEnumerable<Server> servers, UnitOfWork unitOfWork)
     {
-        _syncTask = new BusyTask() { Name = "Syncing libraries", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing libraries", Type = TaskType.Syncing };
 
         var serverList = servers.ToList();
         var syncedServerIds = serverList.Select(x => x.Id).ToHashSet();
@@ -191,7 +191,7 @@ public class SyncService : ISyncService
 
         foreach (var server in serverList)
         {
-            var libraries = (await scopeRetrieveLibraries(server)).ToList();
+            var libraries = (await ScopeRetrieveLibraries(server)).ToList();
             _logger.LogInformation("Syncing {Count} libraries: ({Libraries}) of server {Server}",
                 libraries.Count,
                 string.Join(", ", libraries.Select(x => x.Name)),
@@ -228,7 +228,7 @@ public class SyncService : ISyncService
             Server = serverList.First(x => x.Id == library.ServerId)
         }).ToList();
 
-        async Task<IEnumerable<Library>> scopeRetrieveLibraries(Server server)
+        async Task<IEnumerable<Library>> ScopeRetrieveLibraries(Server server)
         {
             using var scope = _scopeFactory.CreateScope();
             var plexService = scope.ServiceProvider.GetRequiredService<IPlexRestService>();
@@ -238,7 +238,7 @@ public class SyncService : ISyncService
 
     private async Task<List<Movie>> SyncMovies(IEnumerable<Library> libraries, IPlexRestService plexService)
     {
-        _syncTask = new BusyTask() { Name = "Syncing movies", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing movies", Type = TaskType.Syncing };
 
         var movieLibraries = libraries.Where(x => x.Type == "movie");
         List<Movie> movies = new();
@@ -250,12 +250,12 @@ public class SyncService : ISyncService
             movies.AddRange(moviesFromThisLibrary);
         }
 
-        return movies;
+        return movies.DistinctBy(movie => new ServerScopedKey(movie.ServerId, movie.RatingKey)).ToList();
     }
 
     private async Task<List<TvShow>> SyncTvShows(IEnumerable<Library> libraries, IPlexRestService plexService)
     {
-        _syncTask = new BusyTask() { Name = "Syncing TV shows", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing TV shows", Type = TaskType.Syncing };
 
         var showLibraries = libraries.Where(x => x.Type == "show");
         List<TvShow> tvShows = new();
@@ -267,12 +267,12 @@ public class SyncService : ISyncService
             tvShows.AddRange(tvShowsFromLibrary);
         }
 
-        return tvShows.DistinctBy(x => x.RatingKey).ToList();
+        return tvShows.DistinctBy(show => new ServerScopedKey(show.ServerId, show.RatingKey)).ToList();
     }
 
     private async Task<List<Episode>> SyncEpisodes(IEnumerable<Library> libraries, IPlexRestService plexService)
     {
-        _syncTask = new BusyTask() { Name = "Syncing episodes", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing episodes", Type = TaskType.Syncing };
 
         var showLibraries = libraries.Where(x => x.Type == "show");
         List<Episode> episodes = new();
@@ -284,7 +284,7 @@ public class SyncService : ISyncService
             episodes.AddRange(episodesFromThisLibrary);
         }
 
-        return episodes;
+        return episodes.DistinctBy(episode => new ServerScopedKey(episode.ServerId, episode.RatingKey)).ToList();
     }
 
     private async Task ReplaceMediaForSyncedLibraries(CustomDbContext dbContext, UnitOfWork unitOfWork,
@@ -308,23 +308,18 @@ public class SyncService : ISyncService
         await LogMediaChanges(existingMovies, movies, serverNamesById, "movie");
         await LogMediaChanges(existingTvShows, tvShows, serverNamesById, "tvshow");
 
-        var existingMediaFiles = await dbContext.MediaFiles
+        await dbContext.MediaFiles
             .Where(x => syncedLibraryIds.Contains(x.LibraryId))
-            .ToListAsync();
-        var existingEpisodes = await dbContext.Episodes
+            .ExecuteDeleteAsync();
+        await dbContext.Episodes
             .Where(x => syncedShowLibraryIds.Contains(x.LibraryId))
-            .ToListAsync();
-        var existingTvShowEntities = await dbContext.TvShows
+            .ExecuteDeleteAsync();
+        await dbContext.TvShows
             .Where(x => syncedShowLibraryIds.Contains(x.LibraryId))
-            .ToListAsync();
-        var existingMovieEntities = await dbContext.Movies
+            .ExecuteDeleteAsync();
+        await dbContext.Movies
             .Where(x => syncedMovieLibraryIds.Contains(x.LibraryId))
-            .ToListAsync();
-
-        dbContext.MediaFiles.RemoveRange(existingMediaFiles);
-        dbContext.Episodes.RemoveRange(existingEpisodes);
-        dbContext.TvShows.RemoveRange(existingTvShowEntities);
-        dbContext.Movies.RemoveRange(existingMovieEntities);
+            .ExecuteDeleteAsync();
 
         await dbContext.Movies.AddRangeAsync(movies);
         await dbContext.TvShows.AddRangeAsync(tvShows);
@@ -334,11 +329,11 @@ public class SyncService : ISyncService
     private async Task SyncPlaylists(IReadOnlyCollection<Server> servers, UnitOfWork unitOfWork,
         IPlexRestService plexService)
     {
-        _syncTask = new BusyTask() { Name = "Syncing playlists", Type = TaskType.Syncing };
+        _syncTask = new BusyTask { Name = "Syncing playlists", Type = TaskType.Syncing };
 
         var serverIds = servers.Select(x => x.Id).ToHashSet();
         var playlistsInDb = (await unitOfWork.PlaylistRepository.Get(x => serverIds.Contains(x.ServerId))).ToList();
-        var playlistsInDbById = playlistsInDb.ToDictionary(x => x.Id, x => x);
+        var playlistsInDbById = playlistsInDb.ToDictionary(GetPlaylistIdentity, x => x);
         List<Playlist> playlistsFromApi = new();
 
         foreach (var server in servers)
@@ -356,13 +351,13 @@ public class SyncService : ISyncService
             }
         }
 
-        var playlistIdsFromApi = playlistsFromApi.Select(x => x.Id).ToHashSet();
-        var toRemove = playlistsInDb.Where(x => !playlistIdsFromApi.Contains(x.Id)).ToList();
+        var playlistKeysFromApi = playlistsFromApi.Select(GetPlaylistIdentity).ToHashSet();
+        var toRemove = playlistsInDb.Where(x => !playlistKeysFromApi.Contains(GetPlaylistIdentity(x))).ToList();
         await unitOfWork.PlaylistRepository.Remove(toRemove);
 
-        foreach (var playlistFromApi in playlistsFromApi)
+        foreach (var playlistFromApi in playlistsFromApi.DistinctBy(GetPlaylistIdentity))
         {
-            if (!playlistsInDbById.TryGetValue(playlistFromApi.Id, out var playlistInDb))
+            if (!playlistsInDbById.TryGetValue(GetPlaylistIdentity(playlistFromApi), out var playlistInDb))
             {
                 await unitOfWork.PlaylistRepository.Insert(playlistFromApi);
             }
@@ -397,10 +392,13 @@ public class SyncService : ISyncService
         IReadOnlyCollection<TMedia> currentItems, IReadOnlyDictionary<string, string> serverNamesById, string mediaType)
         where TMedia : class
     {
-        var existingByKey = existingItems.ToDictionary(GetRatingKey);
-        var currentByKey = currentItems.ToDictionary(GetRatingKey);
+        var existingByKey = existingItems.ToDictionary(GetMediaIdentity);
+        var currentByKey = currentItems.ToDictionary(GetMediaIdentity);
 
-        foreach (var addedKey in currentByKey.Keys.Except(existingByKey.Keys).Order())
+        foreach (var addedKey in currentByKey.Keys
+                     .Except(existingByKey.Keys)
+                     .OrderBy(x => x.ServerId)
+                     .ThenBy(x => x.PlexKey))
         {
             var item = currentByKey[addedKey];
             var serverId = GetServerId(item);
@@ -414,7 +412,10 @@ public class SyncService : ISyncService
                 mediaName: GetTitle(item));
         }
 
-        foreach (var removedKey in existingByKey.Keys.Except(currentByKey.Keys).Order())
+        foreach (var removedKey in existingByKey.Keys
+                     .Except(currentByKey.Keys)
+                     .OrderBy(x => x.ServerId)
+                     .ThenBy(x => x.PlexKey))
         {
             var item = existingByKey[removedKey];
             var serverId = GetServerId(item);
@@ -428,6 +429,17 @@ public class SyncService : ISyncService
                 mediaType: mediaType,
                 mediaName: GetTitle(item));
         }
+    }
+
+    private static ServerScopedKey GetMediaIdentity<TMedia>(TMedia item)
+        where TMedia : class
+    {
+        return new ServerScopedKey(GetServerId(item), GetRatingKey(item));
+    }
+
+    private static ServerScopedKey GetPlaylistIdentity(Playlist playlist)
+    {
+        return new ServerScopedKey(playlist.ServerId, playlist.Id);
     }
 
     private static string GetRatingKey<TMedia>(TMedia item)
@@ -467,4 +479,6 @@ public class SyncService : ISyncService
     {
         return mediaType.Equals("tvshow", StringComparison.OrdinalIgnoreCase) ? "TV show" : "movie";
     }
+
+    private readonly record struct ServerScopedKey(string ServerId, string PlexKey);
 }

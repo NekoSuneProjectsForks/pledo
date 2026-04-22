@@ -29,7 +29,7 @@ export function MoviesTable({ items, knownServer = [], showServer = false }) {
             <tbody>
               {movies.flatMap((movie) =>
                 (movie.mediaFiles ?? []).map((mediaFile, index) => (
-                  <tr key={`${movie.ratingKey}-${mediaFile.downloadUri}-${index}`}>
+                  <tr key={`${movie.serverId}-${movie.ratingKey}-${mediaFile.downloadUri}-${index}`}>
                     <td>
                       <div>
                         <p className="font-semibold text-white">{movie.title}</p>

@@ -37,7 +37,7 @@ export function Playlists() {
       {!loading && playlists.length > 0 ? (
         <div className="space-y-4">
           {playlists.map((playlist) => (
-            <details key={playlist.id} className="surface overflow-hidden p-0">
+            <details key={`${playlist.serverId}-${playlist.id}`} className="surface overflow-hidden p-0">
               <summary className="cursor-pointer list-none p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -51,7 +51,10 @@ export function Playlists() {
               <div className="border-t border-white/10 p-6 pt-0">
                 <ul className="space-y-3">
                   {playlist.items.map((item) => (
-                    <li key={`${playlist.id}-${item.id}`} className="surface-soft flex items-center justify-between gap-3 p-4">
+                    <li
+                      key={`${playlist.serverId}-${playlist.id}-${item.id}`}
+                      className="surface-soft flex items-center justify-between gap-3 p-4"
+                    >
                       <span className="text-sm text-slate-200">{item.name ?? item.id}</span>
                       <span className="chip">{item.type}</span>
                     </li>
@@ -59,7 +62,7 @@ export function Playlists() {
                 </ul>
 
                 <div className="mt-5">
-                  <DownloadButton mediaKey={playlist.id} mediaType="playlist">
+                  <DownloadButton mediaKey={playlist.id} mediaType="playlist" serverId={playlist.serverId}>
                     Queue Playlist Download
                   </DownloadButton>
                 </div>

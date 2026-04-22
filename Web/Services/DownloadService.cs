@@ -72,13 +72,14 @@ namespace Web.Services
             }
         }
 
-        private async Task<DownloadElement> CreateDownloadElement(string key, string? mediaFileKey, ElementType elementType)
+        private async Task<DownloadElement> CreateDownloadElement(string key, string? mediaFileKey, ElementType elementType,
+            string? serverId)
         {
             using (var scope = _scopeFactory.CreateScope())
             {
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<UnitOfWork>();
                 ISettingsService settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-                IMediaElement? mediaElement = await GetMediaElement(unitOfWork, elementType, key);
+                IMediaElement? mediaElement = await GetMediaElement(unitOfWork, elementType, key, serverId);
                 if (mediaElement == null)
                     throw new MediaNotFoundException(key);
 
@@ -115,7 +116,7 @@ namespace Web.Services
                     FilePath = filePath,
                     FileName = Path.GetFileName(mediaFile.ServerFilePath),
                     TotalBytes = mediaFile.TotalBytes,
-                    MediaKey = key,
+                    MediaKey = BuildScopedMediaKey(library.ServerId, key),
                     RequestMessage = httpRequestMessage,
                     ServerId = library.ServerId
                 };
@@ -188,15 +189,18 @@ namespace Web.Services
             return Task.FromResult(uriBuilder.Uri);
         }
 
-        private async Task<IMediaElement?> GetMediaElement(UnitOfWork unitOfWork, ElementType elementType, string key)
+        private async Task<IMediaElement?> GetMediaElement(UnitOfWork unitOfWork, ElementType elementType, string key,
+            string? serverId)
         {
             switch (elementType)
             {
                 case ElementType.Movie:
-                    return (await unitOfWork.MovieRepository.Get(x => x.RatingKey == key,
+                    return (await unitOfWork.MovieRepository.Get(
+                            x => x.RatingKey == key && (serverId == null || x.ServerId == serverId),
                         includeProperties: nameof(Movie.MediaFiles))).FirstOrDefault();
                 case ElementType.TvShow:
-                    return (await unitOfWork.EpisodeRepository.Get(x => x.RatingKey == key, null,
+                    return (await unitOfWork.EpisodeRepository.Get(
+                            x => x.RatingKey == key && (serverId == null || x.ServerId == serverId), null,
                             nameof(Episode.TvShow) + "," + nameof(Episode.MediaFiles)))
                         .FirstOrDefault();
                 default:
@@ -204,24 +208,25 @@ namespace Web.Services
             }
         }
 
-        public async Task DownloadMovie(string key, string mediaFileKey)
+        public async Task DownloadMovie(string key, string? mediaFileKey, string? serverId)
         {
-            var downloadElement = await CreateDownloadElement(key, mediaFileKey, ElementType.Movie);
+            var downloadElement = await CreateDownloadElement(key, mediaFileKey, ElementType.Movie, serverId);
             AddToPendingDownloads(downloadElement);
         }
 
-        public async Task DownloadEpisode(string key, string mediaFileKey)
+        public async Task DownloadEpisode(string key, string? mediaFileKey, string? serverId)
         {
-            var downloadElement = await CreateDownloadElement(key, mediaFileKey, ElementType.TvShow);
+            var downloadElement = await CreateDownloadElement(key, mediaFileKey, ElementType.TvShow, serverId);
             AddToPendingDownloads(downloadElement);
         }
 
-        public async Task DownloadSeason(string key, int season)
+        public async Task DownloadSeason(string key, int season, string? serverId)
         {
             using (var scope = _scopeFactory.CreateScope())
             {
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<UnitOfWork>();
-                TvShow? tvShow = (await unitOfWork.TvShowRepository.Get(x => x.RatingKey == key, null, "Episodes"))
+                TvShow? tvShow = (await unitOfWork.TvShowRepository.Get(
+                        x => x.RatingKey == key && (serverId == null || x.ServerId == serverId), null, "Episodes"))
                     .FirstOrDefault();
                 if (tvShow == null)
                     throw new InvalidOperationException();
@@ -230,39 +235,46 @@ namespace Web.Services
                 var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
                 foreach (Episode episode in episodes)
                 {
-                    await SelectMediaFileAndAddToPendingDownloads(episode, settingsService, ElementType.TvShow);
+                    await SelectMediaFileAndAddToPendingDownloads(episode, settingsService, ElementType.TvShow,
+                        tvShow.ServerId);
                 }
             }
         }
 
-        public async Task DownloadPlaylist(string key)
+        public async Task DownloadPlaylist(string key, string? serverId)
         {
             using (var scope = _scopeFactory.CreateScope())
             {
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<UnitOfWork>();
-                Playlist? playlist = await unitOfWork.PlaylistRepository.GetById(key);
+                Playlist? playlist = (await unitOfWork.PlaylistRepository.Get(
+                        x => x.Id == key && (serverId == null || x.ServerId == serverId)))
+                    .FirstOrDefault();
                 if (playlist == null)
                     throw new InvalidOperationException();
 
-                IEnumerable<Movie> movies = await unitOfWork.MovieRepository.Get(x => playlist.Items.Contains(x.RatingKey));
+                IEnumerable<Movie> movies = await unitOfWork.MovieRepository.Get(
+                    x => x.ServerId == playlist.ServerId && playlist.Items.Contains(x.RatingKey));
                 IEnumerable<Episode> episodes =
-                    await unitOfWork.EpisodeRepository.Get(x => playlist.Items.Contains(x.RatingKey));
+                    await unitOfWork.EpisodeRepository.Get(
+                        x => x.ServerId == playlist.ServerId && playlist.Items.Contains(x.RatingKey));
 
                 var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
                 foreach (Movie movie in movies)
                 {
-                    await SelectMediaFileAndAddToPendingDownloads(movie, settingsService, ElementType.Movie);
+                    await SelectMediaFileAndAddToPendingDownloads(movie, settingsService, ElementType.Movie,
+                        playlist.ServerId);
                 }
 
                 foreach (Episode episode in episodes)
                 {
-                    await SelectMediaFileAndAddToPendingDownloads(episode, settingsService, ElementType.TvShow);
+                    await SelectMediaFileAndAddToPendingDownloads(episode, settingsService, ElementType.TvShow,
+                        playlist.ServerId);
                 }
             }
         }
 
         private async Task SelectMediaFileAndAddToPendingDownloads(IMediaElement mediaElement,
-            ISettingsService settingsService, ElementType elementType)
+            ISettingsService settingsService, ElementType elementType, string? serverId)
         {
             var mediaFile = await SelectMediaFile(mediaElement.MediaFiles, settingsService);
             if (mediaFile == null)
@@ -276,16 +288,18 @@ namespace Web.Services
                 return;
             }
 
-            var downloadElement = await CreateDownloadElement(mediaElement.RatingKey, mediaFile.DownloadUri, elementType);
+            var downloadElement =
+                await CreateDownloadElement(mediaElement.RatingKey, mediaFile.DownloadUri, elementType, serverId);
             AddToPendingDownloads(downloadElement);
         }
 
-        public async Task DownloadTvShow(string key)
+        public async Task DownloadTvShow(string key, string? serverId)
         {
             using (var scope = _scopeFactory.CreateScope())
             {
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<UnitOfWork>();
-                TvShow? tvShow = (await unitOfWork.TvShowRepository.Get(x => x.RatingKey == key, null, "Episodes"))
+                TvShow? tvShow = (await unitOfWork.TvShowRepository.Get(
+                        x => x.RatingKey == key && (serverId == null || x.ServerId == serverId), null, "Episodes"))
                     .FirstOrDefault();
                 if (tvShow == null)
                     throw new InvalidOperationException();
@@ -293,7 +307,8 @@ namespace Web.Services
                 var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
                 foreach (Episode episode in tvShow.Episodes)
                 {
-                    await SelectMediaFileAndAddToPendingDownloads(episode, settingsService, ElementType.TvShow);
+                    await SelectMediaFileAndAddToPendingDownloads(episode, settingsService, ElementType.TvShow,
+                        tvShow.ServerId);
                 }
             }
         }
@@ -562,6 +577,11 @@ namespace Web.Services
                 return false;
 
             return true;
+        }
+
+        private static string BuildScopedMediaKey(string serverId, string key)
+        {
+            return $"{serverId}:{key}";
         }
     }
 }

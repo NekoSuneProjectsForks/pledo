@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.Models.DTO;
 using Web.Services;
@@ -17,19 +17,19 @@ public class DownloadController : ControllerBase
         _downloadService = downloadService;
         _logger = logger;
     }
-    
+
     [HttpGet]
     public async Task<IEnumerable<DownloadElementResource>> GetAll()
     {
         return _downloadService.GetAll().Select(ToDownloadElementResource);
     }
-    
+
     [HttpGet("pending")]
     public async Task<IEnumerable<DownloadElementResource>> GetPendingDownloads()
     {
         return _downloadService.GetPendingDownloads().Select(ToDownloadElementResource);
     }
-    
+
     [HttpDelete]
     public async Task<IActionResult> ClearDownloadHistory()
     {
@@ -38,30 +38,30 @@ public class DownloadController : ControllerBase
     }
 
     [HttpPost("movie/{key}")]
-    public async Task DownloadMovie( string key, [FromQuery] string? mediaFileKey)
+    public async Task DownloadMovie(string key, [FromQuery] string? mediaFileKey, [FromQuery] string? serverId)
     {
-        await _downloadService.DownloadMovie(key, mediaFileKey);
+        await _downloadService.DownloadMovie(key, mediaFileKey, serverId);
     }
-    
+
     [HttpPost("episode/{key}")]
-    public async Task DownloadEpisode( string key, [FromQuery] string? mediaFileKey)
+    public async Task DownloadEpisode(string key, [FromQuery] string? mediaFileKey, [FromQuery] string? serverId)
     {
-        await _downloadService.DownloadEpisode(key, mediaFileKey);
+        await _downloadService.DownloadEpisode(key, mediaFileKey, serverId);
     }
-    
+
     [HttpPost("tvshow/{key}")]
-    public async Task DownloadTvShow( string key, [FromQuery] int? season = null)
+    public async Task DownloadTvShow(string key, [FromQuery] int? season = null, [FromQuery] string? serverId = null)
     {
         if (season.HasValue)
-            await _downloadService.DownloadSeason(key, season.Value);
+            await _downloadService.DownloadSeason(key, season.Value, serverId);
         else
-            await _downloadService.DownloadTvShow(key);
+            await _downloadService.DownloadTvShow(key, serverId);
     }
-    
+
     [HttpPost("playlist/{key}")]
-    public async Task DownloadPlaylist( string key)
+    public async Task DownloadPlaylist(string key, [FromQuery] string? serverId)
     {
-        await _downloadService.DownloadPlaylist(key);
+        await _downloadService.DownloadPlaylist(key, serverId);
     }
 
     [HttpDelete("{key}")]
@@ -72,7 +72,7 @@ public class DownloadController : ControllerBase
 
     private static DownloadElementResource ToDownloadElementResource(DownloadElement x)
     {
-        return new DownloadElementResource()
+        return new DownloadElementResource
         {
             Finished = x.Finished,
             Id = x.Id,
