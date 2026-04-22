@@ -10,9 +10,9 @@ export class Overview extends Component {
       account: null,
       servers: null,
       syncLogs: [],
-      syncLogHasMore: false,
+      syncLogCurrentPage: 1,
       syncLogLoading: false,
-      syncLogTake: 24,
+      syncLogPageSize: 24,
       syncLogTotalItems: 0,
       syncSettings: {
         automaticSyncEnabled: true,
@@ -103,6 +103,7 @@ export class Overview extends Component {
       ? `Auto scan every ${this.state.syncSettings.automaticSyncIntervalMinutes} min`
       : "Auto scan disabled";
     const visibleSyncLogs = this.state.syncLogs.length;
+    const totalSyncLogPages = Math.max(1, Math.ceil(this.state.syncLogTotalItems / this.state.syncLogPageSize));
 
     return (
       <div className="space-y-8">
@@ -163,14 +164,15 @@ export class Overview extends Component {
               <p className="eyebrow">Recent Activity</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Automatic sync log</h2>
               <p className="mt-2 text-sm text-slate-400">
-                Showing {visibleSyncLogs} of {this.state.syncLogTotalItems} logged sync events.
+                Page {this.state.syncLogCurrentPage} of {totalSyncLogPages}. Showing {visibleSyncLogs} of{" "}
+                {this.state.syncLogTotalItems} logged sync events.
               </p>
             </div>
             <button
               type="button"
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={this.state.syncLogLoading}
-              onClick={() => this.populateSyncLogs()}
+              onClick={() => this.populateSyncLogs(this.state.syncLogCurrentPage)}
             >
               Refresh Logs
             </button>
@@ -182,15 +184,38 @@ export class Overview extends Component {
               <div className="space-y-3">
                 {this.state.syncLogs.map((entry, index) => this.renderSyncLogEntry(entry, index))}
               </div>
-              {this.state.syncLogHasMore ? (
-                <div className="flex justify-center">
+              {totalSyncLogPages > 1 ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
                     className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={this.state.syncLogLoading}
-                    onClick={() => this.loadMoreSyncLogs()}
+                    disabled={this.state.syncLogLoading || this.state.syncLogCurrentPage <= 1}
+                    onClick={() => this.populateSyncLogs(this.state.syncLogCurrentPage - 1)}
                   >
-                    {this.state.syncLogLoading ? "Loading..." : "Show Older Logs"}
+                    Previous
+                  </button>
+                  {Array.from({ length: totalSyncLogPages }, (_, index) => index + 1).map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                        pageNumber === this.state.syncLogCurrentPage
+                          ? "border border-brand-400/40 bg-brand-500/20 text-brand-100"
+                          : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                      }`}
+                      disabled={this.state.syncLogLoading}
+                      onClick={() => this.populateSyncLogs(pageNumber)}
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={this.state.syncLogLoading || this.state.syncLogCurrentPage >= totalSyncLogPages}
+                    onClick={() => this.populateSyncLogs(this.state.syncLogCurrentPage + 1)}
+                  >
+                    Next
                   </button>
                 </div>
               ) : null}
@@ -312,25 +337,34 @@ export class Overview extends Component {
     }
   }
 
-  async populateSyncLogs(syncLogTake = this.state.syncLogTake) {
+  async populateSyncLogs(syncLogCurrentPage = this.state.syncLogCurrentPage) {
     this.setState({ syncLogLoading: true });
 
     try {
-      const response = await fetch(`api/synclog?skip=0&take=${syncLogTake}`);
-      const data = await response.json();
+      const syncLogPageSize = this.state.syncLogPageSize;
+      const fetchPage = async (pageNumber) => {
+        const skip = Math.max(0, (pageNumber - 1) * syncLogPageSize);
+        const response = await fetch(`api/synclog?skip=${skip}&take=${syncLogPageSize}`);
+        return response.json();
+      };
+
+      let data = await fetchPage(syncLogCurrentPage);
+      const totalItems = data?.totalItems ?? 0;
+      const totalPages = Math.max(1, Math.ceil(totalItems / syncLogPageSize));
+      const safeCurrentPage = Math.min(Math.max(1, syncLogCurrentPage), totalPages);
+
+      if (safeCurrentPage !== syncLogCurrentPage) {
+        data = await fetchPage(safeCurrentPage);
+      }
+
       this.setState({
         syncLogs: data?.items ?? [],
-        syncLogHasMore: Boolean(data?.hasMore),
-        syncLogTake,
-        syncLogTotalItems: data?.totalItems ?? 0,
+        syncLogCurrentPage: safeCurrentPage,
+        syncLogTotalItems: totalItems,
       });
     } finally {
       this.setState({ syncLogLoading: false });
     }
-  }
-
-  async loadMoreSyncLogs() {
-    await this.populateSyncLogs(this.state.syncLogTake + 24);
   }
 
   async populateSyncSettings() {
