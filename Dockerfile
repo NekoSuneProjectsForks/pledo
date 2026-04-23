@@ -1,4 +1,6 @@
-﻿FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+LABEL org.opencontainers.image.source https://github.com/NekoSuneProjectsForks/pledo
+ 
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG TARGETARCH
 WORKDIR /app
 
